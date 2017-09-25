@@ -202,10 +202,10 @@ makePrettyIntroLines (Series name variations) =
                 |> List.head
                 |> Maybe.map Tuple.second
     in
-    ("Series: " ++ name)
-        :: indent 1 ("  → Variations: " ++ gatherVariations variations)
-        :: indent 1 ("  → Baseline: " ++ (Maybe.map (LowLevel.name << Runner.baseline) firstVariation |> Maybe.withDefault "(unknown)"))
-        :: indent 1 "  → Contenders: "
+    Console.bold name
+        :: indent 2 (Console.dark "→ Variations: " ++ gatherVariations variations)
+        :: indent 2 (Console.dark "→ Baseline: " ++ (Maybe.map (LowLevel.name << Runner.baseline) firstVariation |> Maybe.withDefault "(unknown)"))
+        :: indent 2 (Console.dark "→ Contenders: ")
         :: gatherContenders (Maybe.map Runner.contenders firstVariation |> Maybe.withDefault [])
 
 
@@ -219,4 +219,4 @@ gatherVariations variations =
 
 gatherContenders : List LowLevel.Benchmark -> List String
 gatherContenders =
-    List.map (LowLevel.name >> (++) "↝ " >> indent 2)
+    List.map (LowLevel.name >> (++) "▸ " >> indent 4)
