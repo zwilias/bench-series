@@ -1,4 +1,47 @@
-module Series.Runner exposing (..)
+module Series.Runner
+    exposing
+        ( Comparison
+        , Progress(..)
+        , ProgressStats
+        , Series
+        , baseline
+        , compare
+        , contenders
+        , encode
+        , entries
+        , name
+        , series
+        , stats
+        , step
+        )
+
+{-| Provides structural primitives for running a series of benchmarks.
+
+
+# Creating structure
+
+@docs Series, Comparison
+@docs series, compare
+
+
+# Inspecting structure
+
+@docs name, entries
+@docs baseline, contenders
+
+
+# How are things doing?
+
+@docs Progress, ProgressStats
+@docs stats
+
+
+# Other useful things
+
+@docs step
+@docs encode
+
+-}
 
 import Dict exposing (Dict)
 import Json.Encode exposing (Value)
@@ -6,24 +49,56 @@ import Series.LowLevel as LowLevel
 import Task exposing (Task)
 
 
+{-| A series represents .. uhm, a series of comparisons.
+
+It's useful for checking how a thing behaves over a range of inputs.
+
+-}
 type Series comparable
     = Series String (Dict comparable Comparison)
 
 
+{-| A series has a name. For reasons. Maybe it shouldn't, but it does.
+-}
+name : Series comparable -> String
+name (Series name _) =
+    name
+
+
+{-| A series has a dictionary of entries, for each input, there's a single
+`Comparison`.
+-}
+entries : Series comparable -> Dict comparable Comparison
+entries (Series _ entries) =
+    entries
+
+
+{-| A Comparison compares performance of a list of contenders versus a baseline.
+-}
 type Comparison
     = Comparison LowLevel.Benchmark (List LowLevel.Benchmark)
 
 
+{-| Gives you the baseline of a `Comparison`.
+-}
 baseline : Comparison -> LowLevel.Benchmark
 baseline (Comparison baseline _) =
     baseline
 
 
+{-| Gives you the contentders of a `Comparison`.
+-}
 contenders : Comparison -> List LowLevel.Benchmark
 contenders (Comparison _ contenders) =
     contenders
 
 
+{-| Compare a bunch of benchmarks. The first entry is the baseline, the rest are
+contenders. If you don't give this at least 2 benchmarks, it'll explode.
+
+I'm not really expecting anyone to put benchmarks in production, tho.
+
+-}
 compare : List LowLevel.Benchmark -> Comparison
 compare benches =
     case benches of
@@ -34,6 +109,9 @@ compare benches =
             Debug.crash "you need to provide at least two benchmarks to compare"
 
 
+{-| Create a series of benchmarks. It takes a name, a function to create a
+comparison for an input, and a bunch of inputs.
+-}
 series : String -> (comparable -> Comparison) -> List comparable -> Series comparable
 series name toBenchmark cases =
     List.map (\aCase -> ( aCase, toBenchmark aCase )) cases
@@ -63,6 +141,12 @@ maybeTaskList toMaybeTask list =
             |> Just
 
 
+{-| Tries to `step` a series. Same rules as for `LowLevel.Benchmark` apply.
+
+If the benchmark is "done" (or completely errored out), this will return
+`Nothing`. If there is anything left to do, you'll get a `Task` to `perform`.
+
+-}
 step : Series comparable -> Maybe (Task Never (Series comparable))
 step (Series name entries) =
     let
@@ -105,12 +189,21 @@ stepCompare (Comparison baseline cases) =
                 |> Just
 
 
+{-| A Series can either be sizing, in progress (with some statistics), or
+invalid, somehow.
+
+For an example of an invalid benchmark, consider a series with no inputs.
+
+-}
 type Progress
     = Sizing
     | InProgress ProgressStats
     | Invalid
 
 
+{-| Statistics. How much time we've spent, how much we'll need to spend, and how
+many errors we've had.
+-}
 type alias ProgressStats =
     { current : Float, total : Float, errors : Int }
 
@@ -138,6 +231,8 @@ combine left right =
             Sizing
 
 
+{-| Extract statistics from a Series.
+-}
 stats : Series comparable -> Progress
 stats (Series _ entries) =
     Dict.foldl
@@ -186,8 +281,10 @@ statusToStats status =
             InProgress { current = total, total = total, errors = 0 }
 
 
-encodeSeries : (comparable -> Value) -> Series comparable -> Maybe Value
-encodeSeries encodeKey (Series name variations) =
+{-| Encode a benchmark. Json is cool.
+-}
+encode : (comparable -> Value) -> Series comparable -> Maybe Value
+encode encodeKey (Series name variations) =
     case List.filterMap (encodeComparison encodeKey) (Dict.toList variations) of
         [] ->
             Nothing

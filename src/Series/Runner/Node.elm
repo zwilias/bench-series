@@ -1,5 +1,11 @@
 module Series.Runner.Node exposing (SeriesProgram, program)
 
+{-| Run a series as a program.
+
+@docs SeriesProgram, program
+
+-}
+
 import Console
 import Dict exposing (Dict)
 import Json.Encode exposing (Value)
@@ -9,6 +15,14 @@ import Series.Runner as Runner exposing (Series(..))
 import Task exposing (Task)
 
 
+{-| Create a program. This needs a way to `emit` things and a way to encode the
+variable in your series.
+
+You can define the first parameter like so:
+
+    port emit : Value -> Cmd msg
+
+-}
 program :
     (Value -> Cmd (Msg comparable))
     -> (comparable -> Value)
@@ -33,6 +47,9 @@ type Msg comparable
     = Update (Series comparable)
 
 
+{-| A `SeriesProgram Int`, for example, is one that compares benchmarks for a
+number of implementations over a range of `Int` values.
+-}
 type alias SeriesProgram a =
     Program Never (Model a) (Msg a)
 
@@ -179,7 +196,7 @@ done encodeKey report =
     Json.Encode.object
         [ ( "type", Json.Encode.string "done" )
         , ( "msg", Json.Encode.string <| "\x0D" ++ progressBar 72 (Runner.stats report) )
-        , ( "data", Runner.encodeSeries encodeKey report |> Maybe.withDefault (Json.Encode.object []) )
+        , ( "data", Runner.encode encodeKey report |> Maybe.withDefault (Json.Encode.object []) )
         ]
 
 
@@ -194,16 +211,16 @@ makePrettyIntro =
 
 
 makePrettyIntroLines : Series comparable -> List String
-makePrettyIntroLines (Series name variations) =
+makePrettyIntroLines series =
     let
         firstVariation : Maybe Runner.Comparison
         firstVariation =
-            Dict.toList variations
+            Dict.toList (Runner.entries series)
                 |> List.head
                 |> Maybe.map Tuple.second
     in
-    Console.bold name
-        :: indent 2 (Console.dark "→ Variations: " ++ gatherVariations variations)
+    Console.bold (Runner.name series)
+        :: indent 2 (Console.dark "→ Variations: " ++ gatherVariations (Runner.entries series))
         :: indent 2 (Console.dark "→ Baseline: " ++ (Maybe.map (LowLevel.name << Runner.baseline) firstVariation |> Maybe.withDefault "(unknown)"))
         :: indent 2 (Console.dark "→ Contenders: ")
         :: gatherContenders (Maybe.map Runner.contenders firstVariation |> Maybe.withDefault [])
